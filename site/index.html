@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>tilty — your Minecraft world on the web</title>
+<meta name="description" content="An isometric Minecraft world viewer that runs on GitHub Pages or Cloudflare Pages. Works on phones. Includes a field guide to what static hosting can and cannot do." />
+<meta name="theme-color" content="#0b0e12" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%237ee0a1' d='M16 2 30 9.5v13L16 30 2 22.5v-13z'/%3E%3Cpath fill='%230b0e12' d='M16 6.5 26 12v8l-10 5.5L6 20v-8z'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="./assets/styles.css" />
+</head>
+<body>
+
+<header class="appbar">
+  <div class="brand">
+    <span class="cube" aria-hidden="true"></span>
+    tilty <small>world viewer</small>
+  </div>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" data-tab="map" aria-selected="true">Map</button>
+    <button role="tab" data-tab="options" aria-selected="false">Options</button>
+    <button role="tab" data-tab="setup" aria-selected="false">Add your world</button>
+    <button role="tab" data-tab="limits" aria-selected="false">Limits</button>
+  </nav>
+
+  <div class="spacer"></div>
+
+  <button class="icon-btn desktop-only" id="btn-share" title="Copy a link to the current view">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
+    <span>Share view</span>
+  </button>
+  <a class="icon-btn desktop-only" href="https://github.com/Cooreo/MinecraftMap" title="Repository">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.95 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.6 9.6 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.85-2.34 4.7-4.57 4.95.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2z"/></svg>
+  </a>
+  <button class="icon-btn mobile-only" id="btn-reader" aria-expanded="false" aria-controls="sheet">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+    <span>Read</span>
+  </button>
+</header>
+
+<main>
+  <!-- ============================== the map ============================== -->
+  <section class="stage" id="stage">
+    <canvas id="map" aria-label="Isometric map of the demo Minecraft world"></canvas>
+
+    <div class="hud info">
+      <div class="title"><span class="dot"></span><span id="world-name">Loading…</span></div>
+      <div class="rows">
+        <span>zoom</span><b id="ro-zoom">—</b>
+        <span>centre</span><b id="ro-pos">—</b>
+        <span>surface</span><b id="ro-y">—</b>
+      </div>
+      <div class="blockline" id="ro-block">drag to pan · scroll or pinch to zoom</div>
+    </div>
+
+    <div class="hud tools">
+      <button class="icon-btn" id="t-zoom-in" title="Zoom in" aria-label="Zoom in">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <button class="icon-btn" id="t-zoom-out" title="Zoom out" aria-label="Zoom out">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>
+      </button>
+      <div class="sep"></div>
+      <button class="icon-btn" id="t-fit" title="Fit world" aria-label="Fit world">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      </button>
+      <button class="icon-btn" id="t-relief" title="Relief (block sides)" aria-pressed="true" aria-label="Toggle relief">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 14 5-5 4 3 4-6 5 5v6H3z"/></svg>
+      </button>
+      <button class="icon-btn" id="t-labels" title="Place labels" aria-pressed="true" aria-label="Toggle labels">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.6 13.4 12 22l-9-9V3h10z"/><circle cx="8" cy="8" r="1.6"/></svg>
+      </button>
+      <div class="sep"></div>
+      <button class="icon-btn" id="t-png" title="Save a screenshot" aria-label="Save screenshot">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="12" cy="12" r="3.2"/></svg>
+      </button>
+      <button class="icon-btn" id="t-full" title="Fullscreen" aria-label="Fullscreen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
+      </button>
+    </div>
+
+    <div class="hud legend desktop-only">
+      <span class="key"><kbd>drag</kbd> pan</span>
+      <span class="key"><kbd>scroll</kbd> zoom</span>
+      <span class="key"><kbd>dbl</kbd> zoom in</span>
+      <span class="key"><kbd>click</kbd> inspect</span>
+      <span class="key">pinch on touch</span>
+    </div>
+
+    <div class="loading" id="loading">
+      <div class="stack">
+        <div class="bar"><i></i></div>
+        <span id="loading-text">loading demo world…</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== the sheet ============================= -->
+  <aside class="sheet" id="sheet">
+    <div class="sheet-grab" id="sheet-grab">
+      <div class="grip" aria-hidden="true"></div>
+      <strong id="sheet-title">Your world</strong>
+      <span id="sheet-hint">tap to open</span>
+    </div>
+
+    <div class="sheet-inner">
+
+      <!-- ------------------------------- MAP ------------------------------- -->
+      <section class="panel" data-panel="map">
+        <h1>Your world, <em>in the browser</em>.</h1>
+        <p class="lede">
+          This is a live isometric viewer running on plain static files — no server, no database,
+          no WASM download. The world below is a generated demo; swap in your own export and it
+          looks like this.
+        </p>
+
+        <h2>Dimension</h2>
+        <div class="tabs dims" role="tablist" id="dim-tabs" style="width:fit-content"></div>
+
+        <h2>Places</h2>
+        <div id="poi-list"></div>
+
+        <h2>This view</h2>
+        <div class="kv" id="stats">
+          <span class="k">columns</span><span class="v" id="st-columns">—</span>
+          <span class="k">payload</span><span class="v" id="st-size">—</span>
+          <span class="k">parse time</span><span class="v" id="st-parse">—</span>
+          <span class="k">bake time</span><span class="v" id="st-bake">—</span>
+          <span class="k">columns drawn</span><span class="v" id="st-drawn">—</span>
+          <span class="k">detail blocks</span><span class="v" id="st-details">—</span>
+          <span class="k">renderer</span><span class="v good">canvas 2d, no WebGL</span>
+        </div>
+        <p class="lede" style="margin-top:10px;font-size:11.5px">
+          Everything here is client-side. The only requests the map makes are for the JSON files.
+          Interaction blits a pre-baked bitmap, so panning stays at 60 fps even on a phone.
+        </p>
+
+        <h2>Surface materials</h2>
+        <div id="materials" class="materials"></div>
+      </section>
+
+      <!-- ----------------------------- OPTIONS ----------------------------- -->
+      <section class="panel" data-panel="options" hidden>
+        <h1>What's actually <em>possible</em></h1>
+        <p class="lede">
+          Short version: a static host gives you a beautiful, fast, read-only map. It cannot give you
+          live players, chat, or editing, because nothing on the other end is running code.
+          Below is the honest breakdown.
+        </p>
+
+        <h2>Works on GitHub Pages</h2>
+        <div class="card good">
+          <h3><span class="pill yes">yes</span> Isometric / top-down map, 2D or pseudo-3D</h3>
+          <p>Tiles or a single heightmap file. Zoom, pan, pinch, block tooltips, waypoints. This page is the proof — it is one HTML file, one CSS file, two JS files and some JSON.</p>
+        </div>
+        <div class="card good">
+          <h3><span class="pill yes">yes</span> Full 3D fly-around</h3>
+          <p><b>BlueMap</b> renders a real 3D mesh of your world (WebGL, three.js) and ships as static files. It is the nicest result and the heaviest: hundreds of MB to a few GB, tens of thousands of files, hours of first render.</p>
+        </div>
+        <div class="card good">
+          <h3><span class="pill yes">yes</span> Side-by-side dimension switching</h3>
+          <p>Overworld, Nether and End are just separate files or separate tile folders. Nothing special needed.</p>
+        </div>
+        <div class="card good">
+          <h3><span class="pill yes">yes</span> Deep links &amp; sharing</h3>
+          <p>Camera position lives in the URL hash, so <code style="font-family:var(--mono);font-size:11.5px">#x=120&amp;z=-40&amp;z=8</code> can be pasted into Discord and opens exactly there.</p>
+        </div>
+        <div class="card good">
+          <h3><span class="pill yes">yes</span> Private repo, public map</h3>
+          <p>Your world files never need to be public. Convert on your own machine (or in a private Action) and publish only the render output.</p>
+        </div>
+
+        <h2>Possible, with effort</h2>
+        <div class="card warn">
+          <h3><span class="pill maybe">effort</span> Big worlds</h3>
+          <p>GitHub Pages caps the published site at <b>1&nbsp;GB</b>; Cloudflare Pages caps deployments at <b>20,000 files</b> and 25&nbsp;MiB per file. A 5&nbsp;km survival world rendered at 1:1 is already several GB. Fixes: render fewer zoom levels, use JPEG/WebP, or move the tiles to Cloudflare R2 (10&nbsp;GB free, no egress fees) and keep only the HTML on Pages.</p>
+        </div>
+        <div class="card warn">
+          <h3><span class="pill maybe">effort</span> Names, signs, item frames</h3>
+          <p>Renderers skip entities and block entities, so signs and chest contents are invisible. You can bolt on your own labels: export a small JSON of named points (this page does exactly that for its demo POIs) and draw them as markers.</p>
+        </div>
+        <div class="card warn">
+          <h3><span class="pill maybe">effort</span> Automatic updates</h3>
+          <p>A GitHub Action can re-render on a schedule and redeploy — that is still "static". It is not live: expect the map to lag by however often the job runs. See <a href="#setup">Add your world</a>.</p>
+        </div>
+
+        <h2>Not possible on a static host</h2>
+        <div class="card bad">
+          <h3><span class="pill no">no</span> Live player positions</h3>
+          <p>That needs a server polling your Minecraft server's query/RCON port and pushing to browsers. GitHub Pages has no running code. Cloudflare Workers <i>can</i> do it (they are not static), but that is a different, non-free-tier-guaranteed project.</p>
+        </div>
+        <div class="card bad">
+          <h3><span class="pill no">no</span> Editing the world from the map</h3>
+          <p>No writes, no uploading a world through the site, no auth. Any file you drop here stays in your browser tab.</p>
+        </div>
+        <div class="card bad">
+          <h3><span class="pill no">no</span> Block-accurate colours for modded blocks</h3>
+          <p>Mod blocks need a colour table. uNmINeD wants a palette file, BlueMap needs its resource pack. Vanilla renders out of the box; mods are a configuration job, not a click.</p>
+        </div>
+
+        <h2>Host comparison</h2>
+        <table class="cmp">
+          <tr><th>&nbsp;</th><th>GitHub Pages</th><th>Cloudflare Pages</th></tr>
+          <tr><td>Cost</td><td class="num">free</td><td class="num">free</td></tr>
+          <tr><td>Site size</td><td class="num">1 GB</td><td class="num">25 MiB / file</td></tr>
+          <tr><td>File count</td><td class="num">unlimited*</td><td class="num">20,000</td></tr>
+          <tr><td>Bandwidth</td><td class="num">100 GB/mo soft</td><td class="num">unlimited</td></tr>
+          <tr><td>Builds</td><td class="num">10 / hour</td><td class="num">500 / mo</td></tr>
+          <tr><td>Custom domain</td><td class="num">yes</td><td class="num">yes</td></tr>
+          <tr><td>Commercial use</td><td class="num">restricted</td><td class="num">allowed</td></tr>
+          <tr><td>Best for</td><td colspan="2" class="hl">GitHub: small/medium worlds, zero setup, lives next to your repo.
+            Cloudflare: unlimited traffic and bigger files, but watch the 20k file ceiling — put huge tile sets in R2.</td></tr>
+        </table>
+        <p class="lede" style="margin-top:10px;font-size:11.5px">
+          * GitHub has no published per-file cap, but large tile counts make deploys slow; a Jekyll-less
+          Action deploy is fine. Both hosts are static-only, so neither can serve the live features above.
+        </p>
+
+        <h2>Renderer comparison</h2>
+        <table class="cmp">
+          <tr><th>Tool</th><th>Look</th><th>Output</th><th>Verdict</th></tr>
+          <tr><td><b>tilty</b> <span class="pill yes">this</span></td><td>isometric heightmap</td><td class="num">1–5 MB</td><td>Fast phone map. No 3D.</td></tr>
+          <tr><td><b>uNmINeD</b></td><td>2D + isometric</td><td class="num">0.4–2 GB</td><td>Best size/speed ratio; Java &amp; Bedrock.</td></tr>
+          <tr><td><b>BlueMap</b></td><td>true 3D</td><td class="num">1–8 GB</td><td>Gorgeous, heavy, needs WebGL.</td></tr>
+          <tr><td><b>Overviewer</b></td><td>2D tiles</td><td class="num">10–16 GB</td><td>Unmaintained since 2023. Skip.</td></tr>
+          <tr><td><b>Dynmap / squaremap</b></td><td>live 2D</td><td class="num">server</td><td>Live players — not static hosting.</td></tr>
+        </table>
+        <p class="lede" style="margin-top:10px;font-size:11.5px">
+          Numbers are from a 5&nbsp;km-radius world rendered with default settings on the same machine,
+          so they compare size and time fairly; your world will differ.
+        </p>
+      </section>
+
+      <!-- ------------------------------ SETUP ------------------------------ -->
+      <section class="panel" data-panel="setup" hidden>
+        <h1>Add <em>your</em> world</h1>
+        <p class="lede">Three paths, easiest first. You only need one.</p>
+
+        <h2>Path A — done in 10 minutes</h2>
+        <div class="card">
+          <h3>1. Export with uNmINeD</h3>
+          <p>Reads your save folder directly, Java or Bedrock, no server plugin.</p>
+          <pre class="code"><span class="c"># image + interactive web export</span>
+unmined-cli web render --world=<span class="k">"world"</span> --output=<span class="k">"./map"</span> --zoomin=2 --zoomout=4
+unmined-cli image render --world=<span class="k">"world"</span> --output=<span class="k">"preview.png"</span> --trim</pre>
+          <p>Open <code>map/unmined.index.html</code> to check it, then commit the whole <code>map/</code> folder to your repo and point Pages at it. Done — that is a working map on both phone and desktop.</p>
+        </div>
+        <div class="card">
+          <h3>2. Publish</h3>
+          <p>In GitHub: <b>Settings → Pages → Source: GitHub Actions</b>. This repo already has a workflow that deploys the <code>site/</code> folder; replace it with your export folder when you have one.</p>
+        </div>
+
+        <h2>Path B — use this viewer with your data</h2>
+        <div class="card">
+          <h3>Feed tilty from your world</h3>
+          <p>Any tool that can produce a top-down surface + height export works. This repo ships
+            <code>tools/regions_to_json.py</code>, which reads <code>.mca</code> region files and writes the
+            JSON this page loads — no Java, no mods, no server.</p>
+          <pre class="code">python3 tools/regions_to_json.py <span class="k">~/saves/MyWorld</span> -o site/assets/world.json --details
+python3 tools/regions_to_json.py <span class="k">~/saves/MyWorld</span> -o site/assets/nether.json --dimension nether</pre>
+          <p>Then create <code>site/assets/config.json</code> pointing at your files (an example is in the repo). The converter reads the surface heightmap first and only carries blocks <i>above</i> it when you pass <code>--details</code>, which keeps the payload small. Pure Python, no Java, no mods, and it runs on a Raspberry Pi.</p>
+        </div>
+        <div class="card">
+          <h3>Data format (if you build your own)</h3>
+          <pre class="code">{
+  <span class="k">"name"</span>: "My World",
+  <span class="k">"dimension"</span>: "overworld",
+  <span class="k">"bbox"</span>: { "minX": 0, "minZ": 0, "width": 512, "depth": 512 },
+  <span class="k">"palette"</span>: { "grass_block": [7977404, 9126720] },
+  <span class="k">"blocks"</span>: [ "grass_block", "water", "void", ... ],
+  <span class="k">"heights"</span>: [ 72, 63, 0, ... ],
+  <span class="k">"details"</span>: [ [12, 73, 40, "oak_leaves"], [12, 74, 40, "oak_log"] ]
+}</pre>
+          <p><code>blocks</code> and <code>heights</code> are row-major: index = z × width + x. <code>details</code> are extra blocks stacked above a column (trees, walls, lanterns). Keep them sparse — they are drawn last and are the expensive part.</p>
+        </div>
+
+        <h2>Path C — render locally, publish from CI</h2>
+        <div class="card">
+          <h3>Automatic re-render</h3>
+          <p>Keep world files out of Git. Copy them to the runner, run your renderer, publish the output. The demo workflow in <code>.github/workflows/deploy.yml</code> shows the Pages half:</p>
+          <pre class="code">- uses: actions/upload-pages-artifact@v3
+  with: { path: site }
+- uses: actions/deploy-pages@v4</pre>
+        </div>
+
+        <h2>Estimate before you build</h2>
+        <div class="card">
+          <h3>Drop your world folder (or <code>.mca</code> files) here</h3>
+          <p style="margin-bottom:10px">Runs entirely in your browser — files are never uploaded. It counts regions and estimates payload, render time and upload size.</p>
+          <div class="drop" id="drop" tabindex="0" role="button">
+            <strong>Choose files or drop a folder</strong>
+            <small>region files (*.mca), or the whole save folder</small>
+            <input type="file" id="drop-input" multiple webkitdirectory hidden />
+          </div>
+          <div class="estimate" id="estimate" hidden>
+            <div class="kv" id="estimate-kv"></div>
+            <div class="footprint" id="footprint" aria-hidden="true"></div>
+            <p class="lede" style="font-size:11px;margin:8px 0 0">Each square is one 512×512 region. Lit squares are regions you supplied.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ------------------------------ LIMITS ----------------------------- -->
+      <section class="panel" data-panel="limits" hidden>
+        <h1>Where it <em>breaks</em></h1>
+        <p class="lede">
+          Nothing below is a guess. These are the limits you will actually hit, and the workaround for each.
+        </p>
+
+        <h2>Phones</h2>
+        <details>
+          <summary>Full 3D maps can be rough on mobile</summary>
+          <div class="body">
+            <p>BlueMap's viewer is a three.js scene: it needs WebGL2, a few hundred MB of GPU memory, and a steady download. A mid-range Android on 4G will load it, slowly, and will drop frames while flying. Safari on iOS is better than it used to be but still the weakest link.</p>
+            <p>This page avoids the problem by drawing a heightmap on a 2D canvas — no WebGL, no textures, ~122 KB gzipped for the demo overworld. Panning stays interactive because leaving a bitmap on screen is a blit, and the expensive repaint only happens once the camera settles.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Pinch-zoom fights the page</summary>
+          <div class="body">
+            <p>Set <code>touch-action: none</code> on the canvas and handle two-finger gestures yourself, or the browser will zoom the whole page while you are trying to zoom the map. Also disable double-tap-to-zoom via <code>user-scalable=no</code>… which hurts accessibility, so this page disables only the canvas gesture, not page zoom.</p>
+          </div>
+        </details>
+        <details>
+          <summary>iOS Safari has no <code>100vh</code></summary>
+          <div class="body">
+            <p>Use <code>100dvh</code> for anything full-screen, and keep the map above the home-bar safe area. Header and bottom sheet are sized from the viewport height here for exactly that reason.</p>
+          </div>
+        </details>
+
+        <h2>Data size</h2>
+        <details>
+          <summary>GitHub Pages: 1 GB published site</summary>
+          <div class="body">
+            <p>Hard-ish. Tile maps multiply fast: 1:1 detail on a 10k×10k world is 400 regions × 16 zooms of tiles, each a separate HTTP request. uNmINeD at <code>--zoomin 2</code> on a small world is already ~3,000 files; the same world at <code>zoomin 4</code> is ~12,000.</p>
+            <p>Workarounds, in order of effort: lower <code>--zoomin</code>; export JPEG instead of PNG (5× smaller, slightly soft); serve tiles from Cloudflare R2 behind your Pages site; or drop to a single-file heightmap like this page.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Cloudflare Pages: 20,000 files, 25 MiB each</summary>
+          <div class="body">
+            <p>The file cap is the trap — bandwidth is effectively unlimited, file count is not. R2 has no such limit (10 GB storage free, no egress fees) and can sit on the same custom domain under <code>/tiles/*</code>, so the usual answer for a serious map is: HTML/CSS/JS on Pages, tiles on R2.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Deploys get slow</summary>
+          <div class="body">
+            <p>A 20k-file deploy takes minutes and every re-render re-uploads everything. Render once, keep the output in a release asset or R2, and only redeploy the shell.</p>
+          </div>
+        </details>
+
+        <h2>What static hosting cannot do</h2>
+        <details>
+          <summary>Live player markers, chat, console</summary>
+          <div class="body">
+            <p>All of that needs a process that can reach your Minecraft server. Static hosts serve files and nothing else. Cloudflare Workers, Vercel functions or a €4 VPS can do it — but then you are maintaining a service, with auth, rate limits and a server to keep alive. If you want that experience, install <b>Dynmap</b> or <b>squaremap</b> on the server and host it there instead.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Uploading a world through the website</summary>
+          <div class="body">
+            <p>Tempting: drag a save into the browser, get a map. Doable entirely client-side (this page's estimator does the counting part), but a 2 GB save in a browser tab is a memory problem, and there is nowhere to persist the result without a backend. Keep conversion on your machine.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Entities, mobs, armour stands, your pet</summary>
+          <div class="body">
+            <p>Renderers draw blocks. Entities are a separate data source and none of the static exporters ship them. A plugin-based live map can, which is another reason people run Dynmap.</p>
+          </div>
+        </details>
+
+        <h2>Privacy &amp; ownership</h2>
+        <details>
+          <summary>Your coordinates are public</summary>
+          <div class="body">
+            <p>Anything on Pages is public, even from a private repo. A world map reveals your base, your farms and your ore tunnels to anything that crawls the URL. If that matters: obfuscate the URL, render only explored-but-safe areas with <code>--area</code>, or keep the repo private and publish behind Cloudflare Access.</p>
+          </div>
+        </details>
+        <details>
+          <summary>Nobody updates it for you</summary>
+          <div class="body">
+            <p>Unless you wire CI, the map is a snapshot. A scheduled Action can refresh it, but only from a copy of the world that exists somewhere reachable by the runner.</p>
+          </div>
+        </details>
+
+        <h2>Verdict</h2>
+        <div class="card good">
+          <h3>GitHub Pages is enough — start there</h3>
+          <p>For a private-ish survival world, a map like this one or a uNmINeD export fits comfortably in the limits, costs nothing, and lives next to your code. Reach for Cloudflare Pages when you hit 1 GB or want unlimited traffic; reach for R2 when you hit 20,000 files. Only leave static hosting when you need live data — and if you need live data, a proper map plugin on the server is usually the better answer than building one.</p>
+        </div>
+      </section>
+
+    </div>
+
+    <footer>
+      <b>tilty</b> — a static Minecraft map viewer. Demo world generated, not played.<br />
+      Built for GitHub Pages and Cloudflare Pages. No trackers, no backend, no cookies.
+    </footer>
+  </aside>
+</main>
+
+<script type="module" src="./assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "_comment": "Copy to site/assets/config.json to replace the demo world. Files are fetched relative to the site root, so keep them next to this file or in a subfolder.",
+  "title": "My world — tilty",
+  "worlds": {
+    "overworld": { "file": "assets/world.json", "label": "Overworld" },
+    "nether": { "file": "assets/nether.json", "label": "Nether" },
+    "end": { "file": "assets/end.json", "label": "The End" }
+  },
+  "pois": "assets/pois.json"
+}

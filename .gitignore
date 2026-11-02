@@ -1,0 +1,6 @@
+Generated previews and scratch files stay out of git.
+tmpimg/
+*.pyc
+__pycache__/
+.DS_Store
+node_modules/
