@@ -1,0 +1,60 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# one deploy at a time; don't cancel one that is already running
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # If you regenerate the demo world, do it here so the published map is
+      # never stale. Your own world can be produced the same way, e.g.
+      #   python3 tools/regions_to_json.py world -o site/assets/world.json --details
+      - name: Regenerate demo world
+        run: python3 tools/make_demo_world.py
+
+      - name: Sanity check the converter
+        run: python3 tools/regions_to_json.py --selftest
+
+      - name: Check the site is self-contained
+        run: |
+          set -eu
+          test -f site/index.html
+          test -f site/assets/app.js
+          test -f site/assets/map.js
+          test -f site/assets/styles.css
+          # no absolute localhost or backend calls: this must stay a static site
+          if grep -rn "http://localhost\|127.0.0.1" site/ ; then
+            echo "found a localhost reference in the published site"; exit 1
+          fi
+          echo "site size: $(du -sh site | cut -f1)"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

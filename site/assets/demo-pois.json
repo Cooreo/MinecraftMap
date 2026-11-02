@@ -1,0 +1,44 @@
+[
+  {
+    "name": "Ember Keep",
+    "x": 56,
+    "z": -44,
+    "dimension": "overworld",
+    "note": "Curtain wall, gatehouse and a tower tall enough to see the whole island from."
+  },
+  {
+    "name": "Willow Village",
+    "x": -45,
+    "z": 52,
+    "dimension": "overworld",
+    "note": "Six cottages on a gravel path, each with a lantern in the doorway."
+  },
+  {
+    "name": "The Great Oak",
+    "x": -18,
+    "z": -74,
+    "dimension": "overworld",
+    "note": "21 blocks of trunk. The leaves are the expensive part of this render."
+  },
+  {
+    "name": "Bay Pier",
+    "x": 30,
+    "z": 2,
+    "dimension": "overworld",
+    "note": "Planks laid into the shallow water, torches every six blocks."
+  },
+  {
+    "name": "Ruined Crimson Hall",
+    "x": 0,
+    "z": 0,
+    "dimension": "nether",
+    "note": "The nether hub: blackstone floor, glowstone ceiling."
+  },
+  {
+    "name": "Obsidian Spire",
+    "x": 0,
+    "z": 0,
+    "dimension": "end",
+    "note": "Spawn platform at the centre of the ring."
+  }
+]

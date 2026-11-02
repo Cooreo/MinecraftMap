@@ -1,0 +1,5 @@
+[
+  { "name": "Home", "x": 128, "z": -64, "dimension": "overworld", "note": "The base. Nothing valuable, promise." },
+  { "name": "Iron farm", "x": -410, "z": 92, "dimension": "overworld", "note": "Runs while AFK." },
+  { "name": "Nether hub", "x": 16, "z": -8, "dimension": "nether", "note": "Portal room, four tunnels." }
+]
