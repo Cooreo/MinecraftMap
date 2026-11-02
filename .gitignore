@@ -4,3 +4,5 @@ tmpimg/
 __pycache__/
 .DS_Store
 node_modules/
+tools/dev/*.svg
+tools/dev/*.png

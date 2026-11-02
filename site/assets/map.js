@@ -14,10 +14,20 @@
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
-const MAX_CLIFF = 12; // how many blocks of side face we bother drawing
+// Side faces must reach the neighbour they fall to. The original cap of 12
+// left transparent triangles wherever a cliff was taller than the cap, which
+// is what users saw as "gaps between blocks" in real worlds.
+const MAX_CLIFF = 96;
 
 /* --------------------------------------------------------------- colour --- */
 function shade(hex, amount) {
+  const r = clamp(Math.round(((hex >> 16) & 255) * amount), 0, 255);
+  const g = clamp(Math.round(((hex >> 8) & 255) * amount), 0, 255);
+  const b = clamp(Math.round((hex & 255) * amount), 0, 255);
+  return `rgb(${r},${g},${b})`;
+}
+
+function shadeHex(hex, amount) {
   const r = clamp(Math.round(((hex >> 16) & 255) * amount), 0, 255);
   const g = clamp(Math.round(((hex >> 8) & 255) * amount), 0, 255);
   const b = clamp(Math.round((hex & 255) * amount), 0, 255);
@@ -72,6 +82,9 @@ export function createEngine(canvas, opts = {}) {
     relief: true,
     labels: true,
     followY: true,
+    view: "iso",          // "iso" | "top"
+    hillshade: true,      // top view: shade slopes like a relief map
+    layers: { structures: true },   // structures = trees, walls, anything stacked
     world: null,
     pois: [],
     hover: null,
@@ -194,6 +207,13 @@ export function createEngine(canvas, opts = {}) {
   /* -------------------------------------------------------- projections ---- */
   function project(x, z, y = 0) {
     const tw = state.zoom;
+    if (state.view === "top") {
+      // straight down: exactly the in-game map, no y involved
+      return {
+        x: state.width / 2 + (x - state.camX) * tw,
+        y: state.height / 2 + (z - state.camZ) * tw,
+      };
+    }
     return {
       x: state.width / 2 + (x - state.camX - (z - state.camZ)) * (tw / 2),
       y: state.height / 2 + (x - state.camX + (z - state.camZ)) * (tw / 4) - (y - state.camY) * (tw / 2),
@@ -202,6 +222,12 @@ export function createEngine(canvas, opts = {}) {
 
   function unproject(px, py, y = 0) {
     const tw = state.zoom;
+    if (state.view === "top") {
+      return {
+        x: (px - state.width / 2) / tw + state.camX,
+        z: (py - state.height / 2) / tw + state.camZ,
+      };
+    }
     const a = (px - state.width / 2) / (tw / 2);
     const sum = ((py - state.height / 2) * 4) / tw + 2 * (y - state.camY);
     return { x: (a + sum) / 2 + state.camX, z: (sum - a) / 2 + state.camZ };
@@ -238,6 +264,16 @@ export function createEngine(canvas, opts = {}) {
     const w = state.world;
     if (!w) return null;
     const tw = state.zoom;
+    if (state.view === "top") {
+      const p = unproject(px, py, 0);
+      const x = Math.floor(p.x);
+      const z = Math.floor(p.z);
+      const i = idx(x, z);
+      if (i < 0) return null;
+      const id = w.blocks[i];
+      if (!id) return null;
+      return { x, z, y: w.heights[i], block: w.blockNames[id], face: "top" };
+    }
     for (let y = w.maxY + 30; y >= w.minY - 2; y -= 1) {
       const p = unproject(px, py, y);
       const cx = Math.round(p.x);
@@ -272,6 +308,111 @@ export function createEngine(canvas, opts = {}) {
       }
     }
     return null;
+  }
+
+  /* ------------------------------------------------------- top-down 2D ----- */
+  /**
+   * Plain 2D map: the way Minecraft draws its own maps. One square per block,
+   * viewed from straight above, so the height of a column is only used to pick
+   * a shadow. No side faces, no depth sorting, no stacking — which makes it an
+   * order of magnitude cheaper than the isometric view and the friendliest
+   * thing for a big world on a phone.
+   */
+  function paintTopDown(g, W, H, camX, camZ, zoom, shadeSlopes, showDetails) {
+    const w = state.world;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = "#0d1015";
+    g.fillRect(0, 0, W, H);
+    if (!w) return 0;
+
+    const b = w.bbox;
+    const blocks = w.blocks;
+    const heights = w.heights;
+    const names = w.blockNames;
+    const palette = w.palette;
+    const details = w.cellDetails;
+    const bw = b.width;
+
+    // visible world rectangle (+1 block of bleed so edges are never clipped)
+    const minX = clamp(Math.floor(camX - W / 2 / zoom) - 1, b.minX, b.minX + b.width - 1);
+    const maxX = clamp(Math.ceil(camX + W / 2 / zoom) + 1, b.minX, b.minX + b.width - 1);
+    const minZ = clamp(Math.floor(camZ - H / 2 / zoom) - 1, b.minZ, b.minZ + b.depth - 1);
+    const maxZ = clamp(Math.ceil(camZ + H / 2 / zoom) + 1, b.minZ, b.minZ + b.depth - 1);
+    if (minX > maxX || minZ > maxZ) return 0;
+
+    const originX = W / 2 + (minX - camX) * zoom;
+    const originY = H / 2 + (minZ - camZ) * zoom;
+    // half a pixel of overlap: without it, adjacent squares can leave
+    // hairline gaps when the browser rasterises at fractional positions
+    const cell = zoom + 0.5;
+    const shade = [1, 0.9, 0.8, 0.7];
+
+    let drawn = 0;
+    const batches = new Map();   // "bucket|colour" -> rect list
+
+    for (let z = minZ; z <= maxZ; z++) {
+      const row = (z - b.minZ) * bw;
+      for (let x = minX; x <= maxX; x++) {
+        const i = row + (x - b.minX);
+        const id = blocks[i];
+        if (!id) continue;
+        const name = names[id];
+        // water and ice read better as their own colour even under a dotted sky
+        const base = palette.get(name) || FALLBACK;
+        let bucket = 0;
+        if (shadeSlopes) {
+          const hR = x + 1 <= maxX ? heights[i + 1] : heights[i];
+          const hL = z + 1 <= maxZ ? heights[i + bw] : heights[i];
+          const drop = Math.max(0, heights[i] - hR, heights[i] - hL);
+          if (drop >= 3) bucket = 3;
+          else if (drop >= 2) bucket = 2;
+          else if (drop >= 1) bucket = 1;
+        }
+        const key = bucket * 0x1000000 + base.raw;   // numeric key, no string churn
+        let list = batches.get(key);
+        if (!list) batches.set(key, (list = []));
+        list.push(originX + (x - minX) * zoom, originY + (z - minZ) * zoom);
+        drawn++;
+      }
+    }
+
+    for (const [key, list] of batches) {
+      const bucket = Math.floor(key / 0x1000000);
+      const raw = key % 0x1000000;
+      g.fillStyle = bucket === 0
+        ? "#" + raw.toString(16).padStart(6, "0")
+        : shadeHex(raw, shade[bucket]);
+      const path = new Path2D();
+      for (let i = 0; i < list.length; i += 2) {
+        path.rect(list[i], list[i + 1], cell, cell);
+      }
+      g.fill(path);
+    }
+
+    // structures on top, if the layer is on
+    let detailCount = 0;
+    if (showDetails) {
+      const dot = Math.max(1, zoom);
+      for (const [cellIndex, det] of details) {
+        const x = (cellIndex % bw) + b.minX;
+        const z = Math.floor(cellIndex / bw) + b.minZ;
+        if (x < minX || x > maxX || z < minZ || z > maxZ) continue;
+        // the highest block of the stack is the one you would see from above
+        let topY = -1;
+        let topId = 0;
+        for (let k = 0; k < det.length; k += 2) {
+          if (det[k] > topY) { topY = det[k]; topId = det[k + 1]; }
+        }
+        if (!topId) continue;
+        const base = palette.get(names[topId]) || FALLBACK;
+        g.fillStyle = "#" + base.raw.toString(16).padStart(6, "0");
+        g.fillRect(originX + (x - minX) * zoom, originY + (z - minZ) * zoom, dot, dot);
+        detailCount++;
+      }
+    }
+
+    state.detailsDrawn = detailCount;
+    return drawn;
   }
 
   /* ------------------------------------------------------- scene painter --- */
@@ -341,8 +482,9 @@ export function createEngine(canvas, opts = {}) {
     const sideFactor = (amount) => 1 - (1 - amount) * sideMix;
     // level of detail for stacked blocks: skip them entirely when a block is a
     // couple of pixels, and skip their side faces until they read as blocks
-    const drawDetails = tw >= 2.4;
-    const detailSides = tw >= 5;
+    const detailSides = tw >= 5;      // sides only once a block is a few px wide
+    const drawDetails = state.layers.structures;   // user-controlled layer
+    const detailsAsDots = tw < 1.6;   // at map scale, batch them into pixel dots
     const detailGrow = Math.max(0.5, tw * 0.06);
     // hillshade steps used by the far-out view (index = blocks of drop)
     const SHADE_BUCKETS = [1, 0.9, 0.79, 0.66];
@@ -395,8 +537,42 @@ export function createEngine(canvas, opts = {}) {
         g.fillStyle = bucket === 0 ? "#" + raw.toString(16).padStart(6, "0") : shade(raw, SHADE_BUCKETS[bucket]);
         g.fill(p);
       }
-      // sparse details are still worth drawing when zoomed out to give texture
-      if (tw >= 2.4) {
+      // Details stay visible at every zoom. Below ~1.6 px per block the
+      // per-block polygons are pure overhead, so batch them into one path per
+      // colour: one dot per detail column, which reads as forest texture.
+      if (drawDetails && detailsAsDots) {
+        const dotPaths = new Map();
+        const dot = Math.max(1, tw * 0.55);
+        for (const [cell, det] of details) {
+          const x = (cell % bw) + bx;
+          const z = Math.floor(cell / bw) + bz;
+          const h = heights[cell];
+          const sx = W / 2 + (x - camX - (z - camZ)) * halfW;
+          const sy = H / 2 + (x - camX + (z - camZ)) * halfH - (h - camY) * tw;
+          if (sx + tw < cullL || sx - tw > cullR || sy + tw < cullT || sy - tw > cullB) continue;
+          let topY = -1;
+          let topId = 0;
+          for (let k = 0; k < det.length; k += 2) {
+            if (det[k] > topY) { topY = det[k]; topId = det[k + 1]; }
+          }
+          if (!topId) continue;
+          const base = palette.get(names[topId]) || FALLBACK;
+          let pp = dotPaths.get(base.raw);
+          if (!pp) dotPaths.set(base.raw, (pp = new Path2D()));
+          const dx = sx - dot / 2;
+          const dy = sy - (topY - h) * tw - dot / 2;
+          pp.moveTo(dx, dy);
+          pp.lineTo(dx + dot, dy);
+          pp.lineTo(dx + dot, dy + dot);
+          pp.lineTo(dx, dy + dot);
+          pp.closePath();
+          detailCount++;
+        }
+        for (const [raw, pp] of dotPaths) {
+          g.fillStyle = "#" + raw.toString(16).padStart(6, "0");
+          g.fill(pp);
+        }
+      } else if (drawDetails && tw >= 2.4) {
         for (const [cell, det] of details) {
           const x = (cell % bw) + bx;
           const z = Math.floor(cell / bw) + bz;
@@ -549,12 +725,17 @@ export function createEngine(canvas, opts = {}) {
       bake.width = bw;
       bake.height = bh;
     }
-    const effectiveRelief = state.relief && state.zoom >= 2.2;
+    const effectiveRelief = state.view === "iso" && state.relief && state.zoom >= 2.2;
 
     bakeCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const t0 = performance.now();
     bakeCtx.save();
-    state.drawn = paintScene(bakeCtx, w, h, state.camX, state.camY, state.camZ, state.zoom, effectiveRelief);
+    if (state.view === "top") {
+      state.drawn = paintTopDown(bakeCtx, w, h, state.camX, state.camZ, state.zoom,
+                                 state.hillshade, state.layers.structures);
+    } else {
+      state.drawn = paintScene(bakeCtx, w, h, state.camX, state.camY, state.camZ, state.zoom, effectiveRelief);
+    }
     bakeCtx.restore();
     state.bakeMs = Math.round(performance.now() - t0);
     Object.assign(baked, {
@@ -567,6 +748,9 @@ export function createEngine(canvas, opts = {}) {
       h,
       dpr,
       relief: effectiveRelief,
+      view: state.view,
+      shade: state.hillshade,
+      structures: state.layers.structures,
     });
   }
 
@@ -661,8 +845,12 @@ export function createEngine(canvas, opts = {}) {
         state.dpr * (W / 2 - k * (W / 2) + shiftX),
         state.dpr * (H / 2 - k * (H / 2) + shiftY)
       );
+      // Resampling a full-screen bitmap every frame is the most expensive thing
+      // this viewer does. High quality only pays off near 1:1; while scaled,
+      // bilinear is far cheaper and is what keeps phones smooth.
+      const scaled = Math.abs(k - 1) > 0.002;
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
+      ctx.imageSmoothingQuality = scaled ? "low" : "medium";
       ctx.drawImage(bake, 0, 0, baked.w, baked.h, 0, 0, W, H);
       ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
     }
@@ -911,6 +1099,31 @@ export function createEngine(canvas, opts = {}) {
     },
     setLabels(on) {
       state.labels = on;
+      draw();
+    },
+    setView(view) {
+      if (view !== "iso" && view !== "top") return;
+      state.view = view;
+      // the top view reads a big map much better when it starts wider
+      if (view === "top" && state.zoom > state.maxZoom * 0.5) {
+        state.zoom = state.targetZoom = Math.min(state.targetZoom, state.maxZoom * 0.5);
+      }
+      baked.valid = false;
+      doBake();
+      draw();
+    },
+    setHillshade(on) {
+      state.hillshade = !!on;
+      if (state.view === "top") {
+        baked.valid = false;
+        doBake();
+        draw();
+      }
+    },
+    setStructures(on) {
+      state.layers.structures = !!on;
+      baked.valid = false;
+      doBake();
       draw();
     },
     setRelief(on) {
