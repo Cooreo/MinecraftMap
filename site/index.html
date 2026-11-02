@@ -55,6 +55,11 @@
     </div>
 
     <div class="hud tools">
+      <div class="seg" id="view-seg" role="group" aria-label="View mode">
+        <button data-view="iso" aria-pressed="true" title="Isometric view">Iso</button>
+        <button data-view="top" aria-pressed="false" title="Flat top-down map, like the in-game map">2D</button>
+      </div>
+      <div class="sep"></div>
       <button class="icon-btn" id="t-zoom-in" title="Zoom in" aria-label="Zoom in">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
       </button>
@@ -67,6 +72,9 @@
       </button>
       <button class="icon-btn" id="t-relief" title="Relief (block sides)" aria-pressed="true" aria-label="Toggle relief">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 14 5-5 4 3 4-6 5 5v6H3z"/></svg>
+      </button>
+      <button class="icon-btn" id="t-structures" title="Structures layer (trees, walls, builds)" aria-pressed="true" aria-label="Toggle structures layer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16"/><path d="m7 20 5-9 5 9"/><path d="M12 11V4"/><path d="m9 7 3-3 3 3"/></svg>
       </button>
       <button class="icon-btn" id="t-labels" title="Place labels" aria-pressed="true" aria-label="Toggle labels">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.6 13.4 12 22l-9-9V3h10z"/><circle cx="8" cy="8" r="1.6"/></svg>
@@ -114,6 +122,13 @@
           no WASM download. The world below is a generated demo; swap in your own export and it
           looks like this.
         </p>
+
+        <h2>View</h2>
+        <div class="card">
+          <h3>Isometric or flat 2D</h3>
+          <p>The <b>Iso</b> switch draws the world as blocks you can tilt your head at — cliffs, trees and roofs have volume. <b>2D</b> is the plain top-down map, the same thing the game map item shows: one square per block, no sides, no stacking, and about five times cheaper to paint — which makes it the best choice for a big world on a phone.</p>
+          <p>The <b>structures</b> button adds or removes everything player-made on top of the terrain: tree canopies, walls, roofs. Turn it off to see the raw landscape underneath, or leave it off on mobile to halve the work.</p>
+        </div>
 
         <h2>Dimension</h2>
         <div class="tabs dims" role="tablist" id="dim-tabs" style="width:fit-content"></div>

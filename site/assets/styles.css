@@ -231,6 +231,34 @@ main {
 .hud.tools .icon-btn { width: 34px; padding: 0; }
 .hud.tools .sep { height: 1px; background: var(--line); margin: 2px 4px; }
 
+/* view mode switch (iso / 2d) */
+.seg {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 9px;
+  background: #0b1015;
+  border: 1px solid var(--line);
+}
+.seg button {
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 5px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1;
+}
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed="true"] {
+  background: rgba(126, 224, 161, 0.16);
+  color: var(--accent);
+}
+
 .hud.legend {
   left: 12px;
   bottom: 12px;

@@ -155,7 +155,8 @@ function syncUrl() {
   clearTimeout(urlTimer);
   urlTimer = setTimeout(() => {
     const s = engine.state;
-    const hash = `#dim=${current}&x=${Math.round(s.targetX)}&z=${Math.round(s.targetZ)}&zoom=${s.targetZoom.toFixed(1)}`;
+    const view = s.view === "top" ? "&v=2d" : "";
+  const hash = `#dim=${current}&x=${Math.round(s.targetX)}&z=${Math.round(s.targetZ)}&zoom=${s.targetZoom.toFixed(1)}${view}`;
     history.replaceState(null, "", hash);
   }, 300);
 }
@@ -163,7 +164,7 @@ function syncUrl() {
 function readUrl() {
   const p = new URLSearchParams(location.hash.replace(/^#/, ""));
   const num = (k) => (p.get(k) != null && p.get(k) !== "" ? Number(p.get(k)) : null);
-  return { dim: p.get("dim"), x: num("x"), z: num("z"), zoom: num("zoom") };
+  return { dim: p.get("dim"), x: num("x"), z: num("z"), zoom: num("zoom"), view: p.get("v") };
 }
 
 function applyUrlCamera(u) {
@@ -241,6 +242,55 @@ sheet.addEventListener(
 );
 
 /* ---------------------------------------------------------------- tools --- */
+/* view mode + layers, remembered on this device */
+const PREFS_KEY = "tilty.prefs.v1";
+const prefs = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(PREFS_KEY)) || {};
+  } catch {
+    return {};
+  }
+})();
+function savePrefs() {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    /* private mode / quota: preferences just won't persist */
+  }
+}
+
+function applyView(view, { persist = true } = {}) {
+  engine.setView(view);
+  document.querySelectorAll("#view-seg button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.view === view));
+  });
+  // the 3D-only controls are meaningless in the flat map
+  el("t-relief").style.display = view === "top" ? "none" : "";
+  if (persist) {
+    prefs.view = view;
+    savePrefs();
+  }
+  syncUrl();
+}
+
+function applyStructures(on, { persist = true } = {}) {
+  engine.setStructures(on);
+  el("t-structures").setAttribute("aria-pressed", String(on));
+  if (persist) {
+    prefs.structures = on;
+    savePrefs();
+  }
+}
+
+el("view-seg").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-view]");
+  if (btn) applyView(btn.dataset.view);
+});
+
+el("t-structures").addEventListener("click", (e) => {
+  applyStructures(e.currentTarget.getAttribute("aria-pressed") !== "true");
+});
+
 el("t-zoom-in").addEventListener("click", () => engine.setZoom(engine.state.targetZoom * 1.6));
 el("t-zoom-out").addEventListener("click", () => engine.setZoom(engine.state.targetZoom / 1.6));
 el("t-fit").addEventListener("click", () => {
@@ -525,6 +575,10 @@ function handleFiles(files) {
   await loadConfig();
   await loadPois();
   const u = readUrl();
+  // URL wins over the stored preference, so a shared link opens as sent
+  const wantedView = u.view === "2d" ? "top" : u.view === "iso" ? "iso" : prefs.view || "iso";
+  applyView(wantedView, { persist: false });
+  applyStructures(u.view ? true : prefs.structures !== false, { persist: false });
   await showDimension(u.dim && WORLDS[u.dim] ? u.dim : Object.keys(WORLDS)[0], { keepCamera: true });
   applyUrlCamera(u);
   openTab(u.dim ? "map" : "map", { openSheet: false });
